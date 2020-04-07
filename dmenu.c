@@ -16,7 +16,6 @@
 #endif
 #include <X11/Xft/Xft.h>
 
-#include "patches.h"
 #include "drw.h"
 #include "util.h"
 
@@ -31,56 +30,29 @@ enum {
 	SchemeNorm,
 	SchemeSel,
 	SchemeOut,
-	#if FUZZYHIGHLIGHT_PATCH
-	SchemeNormHighlight,
-	SchemeSelHighlight,
-	#endif // FUZZYHIGHLIGHT_PATCH
 	SchemeLast,
 }; /* color schemes */
 
 struct item {
 	char *text;
 	struct item *left, *right;
-	#if NON_BLOCKING_STDIN_PATCH
-	struct item *next;
-	#endif // NON_BLOCKING_STDIN_PATCH
 	int out;
-	#if FUZZYMATCH_PATCH
-	double distance;
-	#endif // FUZZYMATCH_PATCH
 };
 
 static char text[BUFSIZ] = "";
-#if PIPEOUT_PATCH
-static char pipeout[8] = " | dmenu";
-#endif // PIPEOUT_PATCH
 static char *embed;
 static int bh, mw, mh;
-#if XYW_PATCH
-static int dmx = 0, dmy = 0; /* put dmenu at these x and y offsets */
+static int dmx = 0, dmy = 3; /* put dmenu at these x and y offsets */
 static unsigned int dmw = 0; /* make dmenu this wide */
-#endif // XYW_PATCH
 static int inputw = 0, promptw;
-#if PASSWORD_PATCH
-static int passwd = 0;
-#endif // PASSWORD_PATCH
 static int lrpad; /* sum of left and right padding */
-#if REJECTNOMATCH_PATCH
-static int reject_no_match = 0;
-#endif // REJECTNOMATCH_PATCH
 static size_t cursor;
 static struct item *items = NULL;
 static struct item *matches, *matchend;
 static struct item *prev, *curr, *next, *sel;
 static int mon = -1, screen;
-#if PRINTINPUTTEXT_PATCH
-static int use_text_input = 0;
-#endif // PRINTINPUTTEXT_PATCH
 
 static Atom clip, utf8;
-#if WMTYPE_PATCH
-static Atom type, dock;
-#endif // WMTYPE_PATCH
 static Display *dpy;
 static Window root, parentwin, win;
 static XIC xic;
@@ -174,9 +146,6 @@ cistrstr(const char *s, const char *sub)
 static int
 drawitem(struct item *item, int x, int y, int w)
 {
-	#if FUZZYHIGHLIGHT_PATCH
-	int r;
-	#endif // FUZZYHIGHLIGHT_PATCH
 	if (item == sel)
 		drw_setscheme(drw, scheme[SchemeSel]);
 	else if (item->out)
@@ -184,32 +153,16 @@ drawitem(struct item *item, int x, int y, int w)
 	else
 		drw_setscheme(drw, scheme[SchemeNorm]);
 
-	#if FUZZYHIGHLIGHT_PATCH
-	r = drw_text(drw, x, y, w, bh, lrpad / 2, item->text, 0);
-	drawhighlights(item, x, y, w);
-	return r;
-	#else
 	return drw_text(drw, x, y, w, bh, lrpad / 2, item->text, 0);
-	#endif // FUZZYHIGHLIGHT_PATCH
 }
 
 static void
 drawmenu(void)
 {
-	#if SCROLL_PATCH
-	static int curpos, oldcurlen;
-	int curlen, rcurlen;
-	#else
 	unsigned int curpos;
-	#endif // SCROLL_PATCH
 	struct item *item;
 	int x = 0, y = 0, w;
-	#if LINE_HEIGHT_PATCH
 	int fh = drw->fonts->h;
-	#endif // LINE_HEIGHT_PATCH
-	#if PASSWORD_PATCH
-	char *censort;
-	#endif // PASSWORD_PATCH
 
 	drw_setscheme(drw, scheme[SchemeNorm]);
 	drw_rect(drw, 0, 0, mw, mh, 1, 1);
@@ -221,71 +174,19 @@ drawmenu(void)
 	/* draw input field */
 	w = (lines > 0 || !matches) ? mw - x : inputw;
 
-	#if SCROLL_PATCH
-	w -= lrpad / 2;
-	x += lrpad / 2;
-	rcurlen = drw_fontset_getwidth(drw, text + cursor);
-	curlen = drw_fontset_getwidth(drw, text) - rcurlen;
-	curpos += curlen - oldcurlen;
-	curpos = MIN(w, MAX(0, curpos));
-	curpos = MAX(curpos, w - rcurlen);
-	curpos = MIN(curpos, curlen);
-	oldcurlen = curlen;
-
 	drw_setscheme(drw, scheme[SchemeNorm]);
-	#if PASSWORD_PATCH
-	if (passwd) {
-		censort = ecalloc(1, sizeof(text));
-		memset(censort, '.', strlen(text));
-		drw_text_align(drw, x, 0, curpos, bh, censort, cursor, AlignR);
-		drw_text_align(drw, x + curpos, 0, w - curpos, bh, censort + cursor, strlen(censort) - cursor, AlignL);
-		free(censort);
-	} else {
-		drw_text_align(drw, x, 0, curpos, bh, text, cursor, AlignR);
-		drw_text_align(drw, x + curpos, 0, w - curpos, bh, text + cursor, strlen(text) - cursor, AlignL);
-	}
-	#else
-	drw_text_align(drw, x, 0, curpos, bh, text, cursor, AlignR);
-	drw_text_align(drw, x + curpos, 0, w - curpos, bh, text + cursor, strlen(text) - cursor, AlignL);
-	#endif // PASSWORD_PATCH
-	#if LINE_HEIGHT_PATCH
-	drw_rect(drw, x + curpos - 1, 2 + (bh-fh)/2, 2, fh - 4, 1, 0);
-	#else
-	drw_rect(drw, x + curpos - 1, 2, 2, bh - 4, 1, 0);
-	#endif // LINE_HEIGHT_PATCH
-	#else // !SCROLL_PATCH
-	drw_setscheme(drw, scheme[SchemeNorm]);
-	#if PASSWORD_PATCH
-	if (passwd) {
-		censort = ecalloc(1, sizeof(text));
-		memset(censort, '.', strlen(text));
-		drw_text(drw, x, 0, w, bh, lrpad / 2, censort, 0);
-		free(censort);
-	} else
-		drw_text(drw, x, 0, w, bh, lrpad / 2, text, 0);
-	#else
 	drw_text(drw, x, 0, w, bh, lrpad / 2, text, 0);
-	#endif // PASSWORD_PATCH
 
 	curpos = TEXTW(text) - TEXTW(&text[cursor]);
 	if ((curpos += lrpad / 2 - 1) < w) {
 		drw_setscheme(drw, scheme[SchemeNorm]);
-		#if LINE_HEIGHT_PATCH
 		drw_rect(drw, x + curpos, 2 + (bh-fh)/2, 2, fh - 4, 1, 0);
-		#else
-		drw_rect(drw, x + curpos, 2, 2, bh - 4, 1, 0);
-		#endif // LINE_HEIGHT_PATCH
 	}
-	#endif // SCROLL_PATCH
 
 	if (lines > 0) {
 		/* draw vertical list */
 		for (item = curr; item != next; item = item->right)
-			#if VERTFULL_PATCH
-			drawitem(item, 0, y += bh, mw);
-			#else
 			drawitem(item, x, y += bh, mw - x);
-			#endif // VERTFULL_PATCH
 	} else if (matches) {
 		/* draw horizontal list */
 		x += inputw;
@@ -304,9 +205,6 @@ drawmenu(void)
 		}
 	}
 	drw_map(drw, win, 0, 0, mw, mh);
-	#if NON_BLOCKING_STDIN_PATCH
-	XFlush(dpy);
-	#endif // NON_BLOCKING_STDIN_PATCH
 }
 
 static void
@@ -347,12 +245,6 @@ grabkeyboard(void)
 static void
 match(void)
 {
-	#if FUZZYMATCH_PATCH
-	if (fuzzy) {
-		fuzzymatch();
-		return;
-	}
-	#endif
 	static char **tokv = NULL;
 	static int tokn = 0;
 
@@ -360,9 +252,6 @@ match(void)
 	int i, tokc = 0;
 	size_t len, textsize;
 	struct item *item, *lprefix, *lsubstr, *prefixend, *substrend;
-	#if NON_BLOCKING_STDIN_PATCH
-	int preserve = 0;
-	#endif // NON_BLOCKING_STDIN_PATCH
 
 	strcpy(buf, text);
 	/* separate input text into tokens to be matched individually */
@@ -371,7 +260,6 @@ match(void)
 			die("cannot realloc %u bytes:", tokn * sizeof *tokv);
 	len = tokc ? strlen(tokv[0]) : 0;
 
-	#if PREFIXCOMPLETION_PATCH
 	if (use_prefix) {
 		matches = lprefix = matchend = prefixend = NULL;
 		textsize = strlen(text);
@@ -379,15 +267,7 @@ match(void)
 		matches = lprefix = lsubstr = matchend = prefixend = substrend = NULL;
 		textsize = strlen(text) + 1;
 	}
-	#else
-	matches = lprefix = lsubstr = matchend = prefixend = substrend = NULL;
-	textsize = strlen(text) + 1;
-	#endif // PREFIXCOMPLETION_PATCH
-	#if NON_BLOCKING_STDIN_PATCH
-	for (item = items; item; item = item->next)
-	#else
 	for (item = items; item && item->text; item++)
-	#endif
 	{
 		for (i = 0; i < tokc; i++)
 			if (!fstrstr(item->text, tokv[i]))
@@ -399,16 +279,8 @@ match(void)
 			appenditem(item, &matches, &matchend);
 		else if (!fstrncmp(tokv[0], item->text, len))
 			appenditem(item, &lprefix, &prefixend);
-		#if PREFIXCOMPLETION_PATCH
 		else if (!use_prefix)
-		#else
-		else
-		#endif // PREFIXCOMPLETION_PATCH
 			appenditem(item, &lsubstr, &substrend);
-		#if NON_BLOCKING_STDIN_PATCH
-		if (sel == item)
-			preserve = 1;
-		#endif // NON_BLOCKING_STDIN_PATCH
 	}
 	if (lprefix) {
 		if (matches) {
@@ -418,11 +290,7 @@ match(void)
 			matches = lprefix;
 		matchend = prefixend;
 	}
-	#if PREFIXCOMPLETION_PATCH
 	if (!use_prefix && lsubstr)
-	#else
-	if (lsubstr)
-	#endif // PREFIXCOMPLETION_PATCH
 	{
 		if (matches) {
 			matchend->right = lsubstr;
@@ -431,18 +299,8 @@ match(void)
 			matches = lsubstr;
 		matchend = substrend;
 	}
-	#if NON_BLOCKING_STDIN_PATCH
-	if (!preserve)
-	#endif // NON_BLOCKING_STDIN_PATCH
 	curr = sel = matches;
 
-	#if INSTANT_PATCH
-	if (instant && matches && matches==matchend && !lsubstr) {
-		puts(matches->text);
-		cleanup();
-		exit(0);
-	}
-	#endif // INSTANT_PATCH
 
 	calcoffsets();
 }
@@ -453,13 +311,6 @@ insert(const char *str, ssize_t n)
 	if (strlen(text) + n > sizeof text - 1)
 		return;
 
-	#if REJECTNOMATCH_PATCH
-	static char last[BUFSIZ] = "";
-	if (reject_no_match) {
-		/* store last text value in case we need to revert it */
-		memcpy(last, text, BUFSIZ);
-	}
-	#endif // REJECTNOMATCH_PATCH
 
 	/* move existing text out of the way, insert new text, and update cursor */
 	memmove(&text[cursor + n], &text[cursor], sizeof text - cursor - MAX(n, 0));
@@ -468,14 +319,6 @@ insert(const char *str, ssize_t n)
 	cursor += n;
 	match();
 
-	#if REJECTNOMATCH_PATCH
-	if (!matches && reject_no_match) {
-		/* revert to last text value if theres no match */
-		memcpy(text, last, BUFSIZ);
-		cursor -= n;
-		match();
-	}
-	#endif // REJECTNOMATCH_PATCH
 }
 
 static size_t
@@ -510,9 +353,7 @@ keypress(XKeyEvent *ev)
 {
 	char buf[32];
 	int len;
-	#if PREFIXCOMPLETION_PATCH
 	struct item * item;
-	#endif // PREFIXCOMPLETION_PATCH
 	KeySym ksym;
 	Status status;
 
@@ -592,10 +433,6 @@ keypress(XKeyEvent *ev)
 		case XK_j: ksym = XK_Next;  break;
 		case XK_k: ksym = XK_Prior; break;
 		case XK_l: ksym = XK_Down;  break;
-		#if NAVHISTORY_PATCH
-		case XK_p: navhistory(-1); buf[0]=0; break;
-		case XK_n: navhistory(1); buf[0]=0; break;
-		#endif // NAVHISTORY_PATCH
 		default:
 			return;
 		}
@@ -672,41 +509,8 @@ insert:
 		break;
 	case XK_Return:
 	case XK_KP_Enter:
-		#if PIPEOUT_PATCH
-		#if PRINTINPUTTEXT_PATCH
-		if (sel && (
-			(use_text_input && (ev->state & ShiftMask)) ||
-			(!use_text_input && !(ev->state & ShiftMask))
-		))
-		#else
-		if (sel && !(ev->state & ShiftMask))
-		#endif // PRINTINPUTTEXT_PATCH
-		{
-			if (sel->text[0] == startpipe[0]) {
-				strncpy(sel->text + strlen(sel->text),pipeout,8);
-				puts(sel->text+1);
-			}
-			puts(sel->text);
-		} else {
-			if (text[0] == startpipe[0]) {
-				strncpy(text + strlen(text),pipeout,8);
-				puts(text+1);
-			}
-			puts(text);
-		}
-		#elif PRINTINPUTTEXT_PATCH
-		if (use_text_input)
-			puts((sel && (ev->state & ShiftMask)) ? sel->text : text);
-		else
-			puts((sel && !(ev->state & ShiftMask)) ? sel->text : text);
-		#else
 		puts((sel && !(ev->state & ShiftMask)) ? sel->text : text);
-		#endif // PIPEOUT_PATCH
 		if (!(ev->state & ControlMask)) {
-			#if NAVHISTORY_PATCH
-			savehistory((sel && !(ev->state & ShiftMask))
-				    ? sel->text : text);
-			#endif // NAVHISTORY_PATCH
 			cleanup();
 			exit(0);
 		}
@@ -728,7 +532,6 @@ insert:
 		}
 		break;
 	case XK_Tab:
-		#if PREFIXCOMPLETION_PATCH
 		if (!matches) break; /* cannot complete no matches */
 		strncpy(text, matches->text, sizeof text - 1);
 		text[sizeof text - 1] = '\0';
@@ -740,24 +543,10 @@ insert:
 			len = cursor;
 		}
 		memset(text + len, '\0', strlen(text) - len);
-		#else
-		if (!sel)
-			return;
-		strncpy(text, sel->text, sizeof text - 1);
-		text[sizeof text - 1] = '\0';
-		cursor = strlen(text);
-		match();
-		#endif //
 		break;
 	}
 
 draw:
-	#if INCREMENTAL_PATCH
-	if (incremental) {
-		puts(text);
-		fflush(stdout);
-	}
-	#endif // INCREMENTAL_PATCH
 	drawmenu();
 }
 
@@ -779,7 +568,6 @@ paste(void)
 	drawmenu();
 }
 
-#if !NON_BLOCKING_STDIN_PATCH
 static void
 readstdin(void)
 {
@@ -787,12 +575,6 @@ readstdin(void)
 	size_t i, imax = 0, size = 0;
 	unsigned int tmpmax = 0;
 
-	#if PASSWORD_PATCH
-	if (passwd) {
-		inputw = lines = 0;
-		return;
-	}
-	#endif // PASSWORD_PATCH
 
 	/* read each line from stdin and add it to the item list */
 	for (i = 0; fgets(buf, sizeof buf, stdin); i++) {
@@ -815,14 +597,9 @@ readstdin(void)
 	inputw = items ? TEXTW(items[imax].text) : 0;
 	lines = MIN(lines, i);
 }
-#endif // NON_BLOCKING_STDIN_PATCH
 
 static void
-#if NON_BLOCKING_STDIN_PATCH
-readevent(void)
-#else
 run(void)
-#endif // NON_BLOCKING_STDIN_PATCH
 {
 	XEvent ev;
 
@@ -830,11 +607,9 @@ run(void)
 		if (XFilterEvent(&ev, win))
 			continue;
 		switch(ev.type) {
-		#if MOUSE_SUPPORT_PATCH
 		case ButtonPress:
 			buttonpress(&ev);
 			break;
-		#endif // MOUSE_SUPPORT_PATCH
 		case DestroyNotify:
 			if (ev.xdestroywindow.window != win)
 				break;
@@ -880,34 +655,17 @@ setup(void)
 	int a, di, n, area = 0;
 #endif
 	/* init appearance */
-	#if XRESOURCES_PATCH
-	for (j = 0; j < SchemeLast; j++)
-		scheme[j] = drw_scm_create(drw, (const char**)colors[j], 2);
-	for (j = 0; j < SchemeOut; ++j)
-		for (i = 0; i < 2; ++i)
-			free(colors[j][i]);
-	#else
 	for (j = 0; j < SchemeLast; j++)
 		scheme[j] = drw_scm_create(drw, colors[j], 2);
-	#endif // XRESOURCES_PATCH
 
 	clip = XInternAtom(dpy, "CLIPBOARD",   False);
 	utf8 = XInternAtom(dpy, "UTF8_STRING", False);
-	#if WMTYPE_PATCH
-	type = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", False);
-	dock = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DOCK", False);
-	#endif // WMTYPE_PATCH
 
 	/* calculate menu geometry */
 	bh = drw->fonts->h + 2;
-	#if LINE_HEIGHT_PATCH
 	bh = MAX(bh,lineheight);	/* make a menu line AT LEAST 'lineheight' tall */
-	#endif // LINE_HEIGHT_PATCH
 	lines = MAX(lines, 0);
 	mh = (lines + 1) * bh;
-	#if CENTER_PATCH
-	promptw = (prompt && *prompt) ? TEXTW(prompt) - lrpad / 4 : 0;
-	#endif // CENTER_PATCH
 #ifdef XINERAMA
 	i = 0;
 	if (parentwin == root && (info = XineramaQueryScreens(dpy, &n))) {
@@ -934,31 +692,9 @@ setup(void)
 				if (INTERSECT(x, y, 1, 1, info[i]) != 0)
 					break;
 
-		#if CENTER_PATCH
-		if (center) {
-			mw = MIN(MAX(max_textw() + promptw, min_width), info[i].width);
-			x = info[i].x_org + ((info[i].width  - mw) / 2);
-			y = info[i].y_org + ((info[i].height - mh) / 2);
-		} else {
-			#if XYW_PATCH
-			x = info[i].x_org + dmx;
-			y = info[i].y_org + (topbar ? dmy : info[i].height - mh - dmy);
-			mw = (dmw>0 ? dmw : info[i].width);
-			#else
-			x = info[i].x_org;
-			y = info[i].y_org + (topbar ? 0 : info[i].height - mh);
-			mw = info[i].width;
-			#endif // XYW_PATCH
-		}
-		#elif XYW_PATCH
 		x = info[i].x_org + dmx;
 		y = info[i].y_org + (topbar ? dmy : info[i].height - mh - dmy);
 		mw = (dmw>0 ? dmw : info[i].width);
-		#else
-		x = info[i].x_org;
-		y = info[i].y_org + (topbar ? 0 : info[i].height - mh);
-		mw = info[i].width;
-		#endif // CENTER_PATCH / XYW_PATCH
 		XFree(info);
 	} else
 #endif
@@ -966,35 +702,11 @@ setup(void)
 		if (!XGetWindowAttributes(dpy, parentwin, &wa))
 			die("could not get embedding window attributes: 0x%lx",
 			    parentwin);
-		#if CENTER_PATCH
-		if (center) {
-			mw = MIN(MAX(max_textw() + promptw, min_width), wa.width);
-			x = (wa.width  - mw) / 2;
-			y = (wa.height - mh) / 2;
-		} else {
-			#if XYW_PATCH
-			x = dmx;
-			y = topbar ? dmy : wa.height - mh - dmy;
-			mw = (dmw>0 ? dmw : wa.width);
-			#else
-			x = 0;
-			y = topbar ? 0 : wa.height - mh;
-			mw = wa.width;
-			#endif // XYW_PATCH
-		}
-		#elif XYW_PATCH
 		x = dmx;
 		y = topbar ? dmy : wa.height - mh - dmy;
 		mw = (dmw>0 ? dmw : wa.width);
-		#else
-		x = 0;
-		y = topbar ? 0 : wa.height - mh;
-		mw = wa.width;
-		#endif // CENTER_PATCH / XYW_PATCH
 	}
-	#if !CENTER_PATCH
 	promptw = (prompt && *prompt) ? TEXTW(prompt) - lrpad / 4 : 0;
-	#endif // CENTER_PATCH
 	inputw = MIN(inputw, mw/3);
 	match();
 
@@ -1002,26 +714,12 @@ setup(void)
 	swa.override_redirect = True;
 	swa.background_pixel = scheme[SchemeNorm][ColBg].pixel;
 	swa.event_mask = ExposureMask | KeyPressMask | VisibilityChangeMask
-	#if MOUSE_SUPPORT_PATCH
 	| ButtonPressMask
-	#endif // MOUSE_SUPPORT_PATCH
 	;
-	#if BORDER_PATCH
-	win = XCreateWindow(dpy, parentwin, x, y, mw, mh, border_width,
-	#else
 	win = XCreateWindow(dpy, parentwin, x, y, mw, mh, 0,
-	#endif // BORDER_PATCH
 	                    CopyFromParent, CopyFromParent, CopyFromParent,
 	                    CWOverrideRedirect | CWBackPixel | CWEventMask, &swa);
-	#if BORDER_PATCH
-	if (border_width)
-		XSetWindowBorder(dpy, win, scheme[SchemeSel][ColBg].pixel);
-	#endif // BORDER_PATCH
 	XSetClassHint(dpy, win, &ch);
-	#if WMTYPE_PATCH
-	XChangeProperty(dpy, win, type, XA_ATOM, 32, PropModeReplace,
-			(unsigned char *) &dock, 1);
-	#endif // WMTYPE_PATCH
 
 
 	/* input methods */
@@ -1049,56 +747,13 @@ static void
 usage(void)
 {
 	fputs("usage: dmenu [-bfv"
-		#if CENTER_PATCH
-		"c"
-		#endif
-		#if !NON_BLOCKING_STDIN_PATCH
 		"i"
-		#endif // NON_BLOCKING_STDIN_PATCH
-		#if INCREMENTAL_PATCH
-		"r"
-		#endif // INCREMENTAL_PATCH
-		#if INSTANT_PATCH
-		"n"
-		#endif // INSTANT_PATCH
-		#if PRINTINPUTTEXT_PATCH
-		"t"
-		#endif // PRINTINPUTTEXT_PATCH
-		#if PREFIXCOMPLETION_PATCH
 		"x"
-		#endif // PREFIXCOMPLETION_PATCH
-		#if FUZZYMATCH_PATCH
-		"F"
-		#endif // FUZZYMATCH_PATCH
-		#if PASSWORD_PATCH
-		"P"
-		#endif // PASSWORD_PATCH
-		#if REJECTNOMATCH_PATCH
-		"R" // (changed from r to R due to conflict with INCREMENTAL_PATCH)
-		#endif // REJECTNOMATCH_PATCH
 		"] [-l lines] [-p prompt] [-fn font] [-m monitor]"
 		"\n             [-nb color] [-nf color] [-sb color] [-sf color] [-w windowid]"
-		#if BORDER_PATCH || INITIALTEXT_PATCH || LINE_HEIGHT_PATCH || NAVHISTORY_PATCH || XYW_PATCH
 		"\n            "
-		#endif
-		#if BORDER_PATCH
-		" [-bw width]"
-		#endif // BORDER_PATCH
-		#if INITIALTEXT_PATCH
-		" [-it text]"
-		#endif // INITIALTEXT_PATCH
-		#if LINE_HEIGHT_PATCH
 		" [-h height]"
-		#endif // LINE_HEIGHT_PATCH
-		#if NAVHISTORY_PATCH
-		" [-H histfile]"
-		#endif // NAVHISTORY_PATCH
-		#if XYW_PATCH
 		" [-X xoffset] [-Y yoffset] [-W width]" // (arguments made upper case due to conflicts)
-		#endif // XYW_PATCH
-		#if FUZZYHIGHLIGHT_PATCH
-		"\n [-nhb color] [-nhf color] [-shb color] [-shf color]" // highlight colors
-		#endif // FUZZYHIGHLIGHT_PATCH
 		"\n", stderr);
 	exit(1);
 }
@@ -1108,9 +763,7 @@ main(int argc, char *argv[])
 {
 	XWindowAttributes wa;
 	int i;
-	#if !NON_BLOCKING_STDIN_PATCH
 	int fast = 0;
-	#endif // NON_BLOCKING_STDIN_PATCH
 
 	for (i = 1; i < argc; i++)
 		/* these options take no arguments */
@@ -1119,74 +772,34 @@ main(int argc, char *argv[])
 			exit(0);
 		} else if (!strcmp(argv[i], "-b")) { /* appears at the bottom of the screen */
 			topbar = 0;
-		#if CENTER_PATCH
-		} else if (!strcmp(argv[i], "-c")) { /* toggles centering of dmenu window on screen */
-			center = !center;
-		#endif
-		#if !NON_BLOCKING_STDIN_PATCH
 		} else if (!strcmp(argv[i], "-f")) { /* grabs keyboard before reading stdin */
 			fast = 1;
-		#endif // NON_BLOCKING_STDIN_PATCH
-		#if INCREMENTAL_PATCH
-		} else if (!strcmp(argv[i], "-r")) { /* incremental */
-			incremental = !incremental;
-		#endif // INCREMENTAL_PATCH
 		} else if (!strcmp(argv[i], "-i")) { /* case-insensitive item matching */
 			fstrncmp = strncasecmp;
 			fstrstr = cistrstr;
-		#if INSTANT_PATCH
-		} else if (!strcmp(argv[i], "-n")) { /* instant select only match */
-			instant = !instant;
-		#endif // INSTANT_PATCH
-		#if PRINTINPUTTEXT_PATCH
-		} else if (!strcmp(argv[i], "-t")) { /* favors text input over selection */
-			use_text_input = 1;
-		#endif // PRINTINPUTTEXT_PATCH
-		#if PREFIXCOMPLETION_PATCH
 		} else if (!strcmp(argv[i], "-x")) { /* invert use_prefix */
 			use_prefix = !use_prefix;
-		#endif // PREFIXCOMPLETION_PATCH
-		#if FUZZYMATCH_PATCH
-		} else if (!strcmp(argv[i], "-F")) { /* disable/enable fuzzy matching, depends on default */
-			fuzzy = !fuzzy;
-		#endif // FUZZYMATCH_PATCH
-		#if PASSWORD_PATCH
-		} else if (!strcmp(argv[i], "-P")) { /* is the input a password */
-			passwd = 1;
-		#endif // PASSWORD_PATCH
-		#if REJECTNOMATCH_PATCH
-		} else if (!strcmp(argv[i], "-R")) { /* reject input which results in no match */
-			reject_no_match = 1;
-		#endif // REJECTNOMATCH_PATCH
 		} else if (i + 1 == argc)
 			usage();
 		/* these options take one argument */
-		#if NAVHISTORY_PATCH
-		else if (!strcmp(argv[i], "-H"))
-			histfile = argv[++i];
-		#endif // NAVHISTORY_PATCH
 		else if (!strcmp(argv[i], "-l"))   /* number of lines in vertical list */
 			lines = atoi(argv[++i]);
-		#if XYW_PATCH
 		else if (!strcmp(argv[i], "-X"))   /* window x offset */
 			dmx = atoi(argv[++i]);
 		else if (!strcmp(argv[i], "-Y"))   /* window y offset (from bottom up if -b) */
 			dmy = atoi(argv[++i]);
 		else if (!strcmp(argv[i], "-W"))   /* make dmenu this wide */
 			dmw = atoi(argv[++i]);
-		#endif // XYW_PATCH
 		else if (!strcmp(argv[i], "-m"))
 			mon = atoi(argv[++i]);
 		else if (!strcmp(argv[i], "-p"))   /* adds prompt to left of input field */
 			prompt = argv[++i];
 		else if (!strcmp(argv[i], "-fn"))  /* font or font set */
 			fonts[0] = argv[++i];
-		#if LINE_HEIGHT_PATCH
 		else if(!strcmp(argv[i], "-h")) { /* minimum height of one menu line */
 			lineheight = atoi(argv[++i]);
 			lineheight = MAX(lineheight,8); /* reasonable default in case of value too small/negative */
 		}
-		#endif // LINE_HEIGHT_PATCH
 		else if (!strcmp(argv[i], "-nb"))  /* normal background color */
 			colors[SchemeNorm][ColBg] = argv[++i];
 		else if (!strcmp(argv[i], "-nf"))  /* normal foreground color */
@@ -1195,28 +808,8 @@ main(int argc, char *argv[])
 			colors[SchemeSel][ColBg] = argv[++i];
 		else if (!strcmp(argv[i], "-sf"))  /* selected foreground color */
 			colors[SchemeSel][ColFg] = argv[++i];
-		#if FUZZYHIGHLIGHT_PATCH
-		else if (!strcmp(argv[i], "-nhb")) /* normal hi background color */
-			colors[SchemeNormHighlight][ColBg] = argv[++i];
-		else if (!strcmp(argv[i], "-nhf")) /* normal hi foreground color */
-			colors[SchemeNormHighlight][ColFg] = argv[++i];
-		else if (!strcmp(argv[i], "-shb")) /* selected hi background color */
-			colors[SchemeSelHighlight][ColBg] = argv[++i];
-		else if (!strcmp(argv[i], "-shf")) /* selected hi foreground color */
-			colors[SchemeSelHighlight][ColFg] = argv[++i];
-		#endif // FUZZYHIGHLIGHT_PATCH
 		else if (!strcmp(argv[i], "-w"))   /* embedding window id */
 			embed = argv[++i];
-		#if BORDER_PATCH
-		else if (!strcmp(argv[i], "-bw"))  /* border width around dmenu */
-			border_width = atoi(argv[++i]);
-		#endif // BORDER_PATCH
-		#if INITIALTEXT_PATCH
-		else if (!strcmp(argv[i], "-it")) {   /* adds initial text */
-			const char * text = argv[++i];
-			insert(text, strlen(text));
-		}
-		#endif // INITIALTEXT_PATCH
 		else
 			usage();
 
@@ -1233,29 +826,15 @@ main(int argc, char *argv[])
 		    parentwin);
 
 	drw = drw_create(dpy, screen, root, wa.width, wa.height);
-	#if XRESOURCES_PATCH
-	readxresources();
-	if (!drw_fontset_create(drw, (const char**)fonts, LENGTH(fonts)))
-		die("no fonts could be loaded.");
-
-	free(fonts[0]);
-	#else
 	if (!drw_fontset_create(drw, fonts, LENGTH(fonts)))
 		die("no fonts could be loaded.");
-	#endif // XRESOURCES_PATCH
 	lrpad = drw->fonts->h;
 
 #ifdef __OpenBSD__
 	if (pledge("stdio rpath", NULL) == -1)
 		die("pledge");
 #endif
-	#if NAVHISTORY_PATCH
-	loadhistory();
-	#endif // NAVHISTORY_PATCH
 
-	#if NON_BLOCKING_STDIN_PATCH
-	grabkeyboard();
-	#else
 	if (fast && !isatty(0)) {
 		grabkeyboard();
 		readstdin();
@@ -1263,7 +842,6 @@ main(int argc, char *argv[])
 		readstdin();
 		grabkeyboard();
 	}
-	#endif // NON_BLOCKING_STDIN_PATCH
 	setup();
 	run();
 

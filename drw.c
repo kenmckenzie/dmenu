@@ -5,7 +5,6 @@
 #include <X11/Xlib.h>
 #include <X11/Xft/Xft.h>
 
-#include "patches.h"
 #include "drw.h"
 #include "util.h"
 
@@ -435,6 +434,3 @@ drw_cur_free(Drw *drw, Cur *cursor)
 	free(cursor);
 }
 
-#if SCROLL_PATCH
-#include "patch/scroll.c"
-#endif
