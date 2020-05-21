@@ -41,7 +41,7 @@ static char text[BUFSIZ] = "";
 static char *embed;
 static int bh, mw, mh;
 static int dmx = 0; /* put dmenu at this x offset */
-static int dmy = 5; /* put dmenu at this y offset (measured from the bottom if topbar is 0) */
+static int dmy = 0; /* put dmenu at this y offset (measured from the bottom if topbar is 0) */
 static unsigned int dmw = 0; /* make dmenu this wide */
 static int inputw = 0, promptw;
 static int lrpad; /* sum of left and right padding */
